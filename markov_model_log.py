@@ -5,13 +5,17 @@ import time
 
 class MarkovModel:
     def __init__(self, 
-                 data_file_path, 
+                 data_file_path,
+                 save_data_verbose_path,
+                 save_data_summary_path,
                  params: list = [0.7, 0.7, 0.7, 0.3, 0.6, 0.4] 
                  ):
         """
         Initialize the Markov Model with a data file path and parameters.
         :param data_file_path: Path to the CSV file containing the data.
         :param params: List of parameters to initialize the model.
+        :param save_data_verbose_path: Path to save verbose data.
+        :param save_data_summary_path: Path to save summary data.
         """
         self.data_file_path = data_file_path
         self.transition_matrix_log = {}
@@ -20,6 +24,9 @@ class MarkovModel:
 
         self.df = pd.read_csv(self.data_file_path)
         self.initialize_params(params)
+
+        self.save_data_verbose_path = save_data_verbose_path
+        self.save_data_summary_path = save_data_summary_path
 
     def data_preprocessing(self, verbose=False):
         """
@@ -44,6 +51,7 @@ class MarkovModel:
             print(f"Example sequence: {self.df_organized.iloc[0]}")
 
 
+        
     def initialize_params(self, params: list = [0.7, 0.7, 0.7, 0.3, 0.6, 0.4]):
         """
         Initialize the model parameters.
@@ -76,6 +84,39 @@ class MarkovModel:
         of starting in a bad state. Denote this as P(B). Note P(G) = 1 - P(B).
         """
     
+    def save_data_to_summary_file(self, message="", newline=False):
+        """ 
+        Save the current model parameters to a summary file.
+        :param message: Optional message to include in the summary file.
+        :param newline: If True, adds a newline after the message.
+        """
+        with open(self.save_data_summary_path, 'a') as f:
+            if (message != ""):
+                f.write(f"{message}\n")
+            f.write(f"Transition Matrix: {self.dict_str(self.transition_matrix_log, 8)}\n")
+            f.write(f"State Probabilities: {self.dict_str(self.state_probabilities_log, 8)}\n")
+            f.write(f"Initial Probabilities: {self.dict_str(self.initial_probabilities_log, 8)}\n")
+            if (newline): f.write("\n")
+
+    def save_data_to_verbose_file(self, iteration, time, message="", newline=False):
+        """ 
+        Save the current model parameters to a verbose file.
+        :iteration: Current iteration number.
+        :time: Time taken for the current iteration.
+        :param message: Optional message to include in the verbose file.
+        """
+        with open(self.save_data_verbose_path, 'a') as f:
+            if (message != ""):
+                f.write(f"{message}\n")
+
+            f.write(f"Iteration {iteration}, " +
+                    f"Time: {time:.2f} s, " +
+                    f"Trans Mat: {self.dict_str(self.transition_matrix_log, 8)}, " +
+                    f"State Probs: {self.dict_str(self.state_probabilities_log, 8)}, " +
+                    f"Init Probs: {self.dict_str(self.initial_probabilities_log, 8)}\n")
+            if (newline): f.write("\n")
+        
+
     # Some helper functions
     def trans_mat_g_to_b_log(self):
         """Calculate the log probability of transitioning from a good state to a bad state."""
@@ -157,7 +198,7 @@ class MarkovModel:
 
         return forward_log, backward_log
 
-    def baum_welch(self, max_iterations=100, tolerance=1e-6):
+    def baum_welch(self, save_data, max_iterations=100, tolerance=1e-6):
         """
         Implements the Baum-Welch algorithm for parameter estimation.
         :param max_iterations: Maximum number of iterations
@@ -169,6 +210,11 @@ class MarkovModel:
         print(f"Iteration 0: Transition Matrix: {self.dict_str(self.transition_matrix_log)}",
         f"State Probabilities: {self.dict_str(self.state_probabilities_log)}",
         f"Initial Probabilities: {self.dict_str(self.initial_probabilities_log)}")
+
+        if save_data:
+            self.save_data_to_summary_file(message=f"Iteration 0, tol: {tolerance}")
+            self.save_data_to_verbose_file(0, 0)
+        
 
         for iteration in range(max_iterations):
             start_time = time.time()
@@ -248,10 +294,19 @@ class MarkovModel:
                   f"Trans Mat: {self.dict_str(self.transition_matrix_log)}",
                   f"State Probs: {self.dict_str(self.state_probabilities_log)}",
                   f"Init Probs: {self.dict_str(self.initial_probabilities_log)}")
+            
+            if save_data:
+                self.save_data_to_verbose_file(iteration + 1, time.time() - start_time)
         
             # Check convergence
             if np.allclose(old_params, self.get_params_exp(), rtol=tolerance):
                 break
+        if save_data:
+            self.save_data_to_summary_file(
+                message=f"Iteration {iteration + 1}, tol: {tolerance}", 
+                newline=True)
+            with open(self.save_data_verbose_path, 'a') as f:
+                f.write(f"\n")
         
 
     def get_params_exp(self):
@@ -265,19 +320,29 @@ class MarkovModel:
             np.exp(self.initial_probabilities_log["bad"])
         ])
 
-    def dict_str(self, d):
-        """Helper function to print dictionary in a readable format"""
+    def dict_str(self, d, n=6):
+        """Helper function to print dictionary in a readable format
+        :param d: Dictionary to convert to string
+        :param n: Number of decimal places to round to
+        :return: String representation of the dictionary
+        """
+
         return_string = ""
         for key, value in d.items():
-            return_string += f"{key}: {np.exp(value):.5f} "
+            return_string += f"{key}: {np.exp(value):.{n}f} "
         return return_string[:-1]  # Remove trailing space
 
 if __name__ == "__main__":
-    data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/answers_revised2.csv"
-    # data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/test.csv"
+    # data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/answers_revised2.csv"
+    save_data_summary_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/ECPD_full_summary.csv"
+    save_data_verbose_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/ECPD_full_verbose.csv"
+    data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/test.csv"
     # data_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/fake_data.csv"
     # model = MarkovModel(data_file_path, [0.7, 0.3, 0.7, 0.3, 0.6, 0.4])
     # model = MarkovModel(data_file_path, [0.9, 0.7, 0.6, 0.4, 0.5, 0.5])
-    model = MarkovModel(data_file_path, [0.9995, 0.998, 0.95, 0.6, 0.5, 0.5]) # Iteration 68: Time: 242.63 s Trans Mat: good: 0.99582 bad: 0.94148 State Probs: good: 0.98495 bad: 0.58401 Init Probs: good: 0.77121 bad: 0.22879
+    model = MarkovModel(data_file_path=data_file_path, 
+                        save_data_verbose_path=save_data_verbose_path,
+                        save_data_summary_path=save_data_summary_path, 
+                        params=[0.9995, 0.998, 0.95, 0.6, 0.5, 0.5]) # Iteration 68: Time: 242.63 s Trans Mat: good: 0.99582 bad: 0.94148 State Probs: good: 0.98495 bad: 0.58401 Init Probs: good: 0.77121 bad: 0.22879, 
     model.data_preprocessing(verbose=False)
-    model.baum_welch()
+    model.baum_welch(save_data=True)
