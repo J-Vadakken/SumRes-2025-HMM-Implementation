@@ -97,6 +97,6 @@ def data_gen_verification(filename):
 
 if __name__ == "__main__":
     num_labels = 1*10**4
-    two_state_hmm_data_gen("fake_data.csv", 10, (num_labels, num_labels), [0.9995, 0.998, 0.95, 0.6, 0.6, 0.4])
+    two_state_hmm_data_gen("fake_data.csv", 1, (num_labels, num_labels), [0.9995, 0.998, 0.95, 0.6, 0.6, 0.4])
     print("Data generation complete.")
     data_gen_verification("fake_data.csv")

@@ -36,9 +36,9 @@ class MarkovModel:
         :param date: Optional date to filter the data.
         """
         # Sort by timestamp for each user
-        self.df = self.df.sort_values(['user_id', 'created_at'])
+        df_sorted = self.df.sort_values(['user_id', 'created_at'])
 
-        self.df_organized = self.df.copy()
+        self.df_organized = df_sorted.copy()
         if worker_id is not None:
             self.df_organized = self.df_organized[
                 (self.df_organized['user_id'] == worker_id) & 
@@ -318,6 +318,54 @@ class MarkovModel:
             with open(self.save_data_verbose_path, 'a') as f:
                 f.write(f"\n")
         
+    def viterbi_log(self, sequence, params=None):
+        """
+        Implements the Viterbi algorithm to find the most likely sequence of states.
+        :param sequence: List of observations ('correct' or 'wrong')
+        :param params: Optional List of parameters to use for the Viterbi algorithm.
+        :type params: list
+        :return: Most likely sequence of states
+        """
+        N = len(sequence)
+        viterbi_log = np.zeros((N, 2))
+        backpointer = np.zeros((N, 2), dtype=int) # To store backpointers.
+
+        # Initialize the transition matrix and state probabilities
+        if params != None:
+            self.initialize_params(params)
+
+        # Initialization step
+        viterbi_log[0, 0] = self.initial_probabilities_log["good"] + \
+            self.emission_prob_log(sequence, 0, "good")
+        viterbi_log[0, 1] = self.initial_probabilities_log["bad"] + \
+            self.emission_prob_log(sequence, 0, "bad")
+        backpointer[0, 0] = 0
+        backpointer[0, 1] = 1
+
+        # Recursion step
+        for t in range(1, N):
+            # Good state
+            backpointer[t,0] = np.argmax([
+                viterbi_log[t-1, 0] + self.transition_matrix_log["good"],
+                viterbi_log[t-1, 1] + self.trans_mat_b_to_g_log()
+            ])
+            backpointer[t, 1] = np.argmax([
+                viterbi_log[t-1, 0] + self.trans_mat_g_to_b_log(),
+                viterbi_log[t-1, 1] + self.transition_matrix_log["bad"]
+            ])
+            viterbi_log[t, 0] = (viterbi_log[t-1, backpointer[t, 0]] +
+                                 self.emission_prob_log(sequence, t, "good"))
+            viterbi_log[t, 1] = (viterbi_log[t-1, backpointer[t, 1]] +
+                                 self.emission_prob_log(sequence, t, "bad"))
+        # Backtrack to find the most likely sequence of states
+        best_path = np.zeros(N, dtype=int)
+        best_path[N-1] = np.argmax(viterbi_log[N-1])
+        for t in range(N-2, -1, -1):
+            best_path[t] = backpointer[t+1, best_path[t+1]]
+        # Convert the best path to 'good'/'bad' states
+        best_path_states = ['good' if state == 0 else 'bad' for state in best_path]
+        return best_path_states
+
 
     def get_params_exp(self):
         """Helper function to get all parameters as a numpy array"""
@@ -343,20 +391,50 @@ class MarkovModel:
         return return_string[:-1]  # Remove trailing space
 
 if __name__ == "__main__":
-    data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/answers_revised2.csv"
+    # data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/answers_revised2.csv"
     save_data_summary_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/ECPD_full_summary.csv"
     save_data_verbose_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/ECPD_full_verbose.csv"
     # data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/test.csv"
-    # data_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/fake_data.csv"
+    data_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/fake_data.csv"
     # model = MarkovModel(data_file_path, [0.7, 0.3, 0.7, 0.3, 0.6, 0.4])
     # model = MarkovModel(data_file_path, [0.9, 0.7, 0.6, 0.4, 0.5, 0.5])
-    model = MarkovModel(data_file_path=data_file_path, 
-                        save_data_verbose_path=save_data_verbose_path,
-                        save_data_summary_path=save_data_summary_path, 
-                        params=[0.99849304, 0.99607914, 0.97798713, 0.88902691, 0, 1]) # Iteration 68: Time: 242.63 s Trans Mat: good: 0.99582 bad: 0.94148 State Probs: good: 0.98495 bad: 0.58401 Init Probs: good: 0.77121 bad: 0.22879, 
-    model.data_preprocessing(verbose=True, 
-                             worker_id="955eb227-5421-470a-ae87-1b210a94bcfb",
-                             date="2023-01-19")
+
+    # Normal Training
+
+    # model = MarkovModel(data_file_path=data_file_path, 
+    #                     save_data_verbose_path=save_data_verbose_path,
+    #                     save_data_summary_path=save_data_summary_path, 
+    #                     params=[0.99849304, 0.99607914, 0.97798713, 0.88902691, 0, 1]) # Iteration 68: Time: 242.63 s Trans Mat: good: 0.99582 bad: 0.94148 State Probs: good: 0.98495 bad: 0.58401 Init Probs: good: 0.77121 bad: 0.22879, 
+    # model.data_preprocessing(verbose=True, 
+                            #  worker_id="955eb227-5421-470a-ae87-1b210a94bcfb",
+                            #  date="2023-01-19")
     # model.data_preprocessing(verbose=True)
     
-    model.baum_welch(save_data=True)
+    # model.baum_welch(save_data=True)
+
+    # Testing the Viterbi algorithm
+    model = MarkovModel(data_file_path=data_file_path,
+                        save_data_verbose_path=save_data_verbose_path,
+                        save_data_summary_path=save_data_summary_path,
+                        params = [0]*6)  # Initialize with zeros for testing
+    model.data_preprocessing(verbose=True)
+    data_sequence = model.viterbi_log(model.df_organized.iloc[0],
+                      params = [0.9995, 0.998, 0.95, 0.6, 0.6, 0.4],
+                      )  # Use the same parameters as in the data generation
+    
+    # Compare data_sequence
+    # Create a new column in the original DataFrame for predicted states
+    model.df['predicted_state'] = None  # Initialize the new column
+    
+    # Get the user_id for the first sequence
+    first_user_id = model.df['user_id'].iloc[0]
+    
+    # Add predicted states for this user
+    mask = model.df['user_id'] == first_user_id
+    model.df.loc[mask, 'predicted_state'] = data_sequence
+    
+    # Save the updated DataFrame to CSV
+    model.df.to_csv('predictions.csv', index=False)
+    
+    print("Predicted states:", data_sequence)
+    print("Actual observations:", model.df_organized.iloc[0])
