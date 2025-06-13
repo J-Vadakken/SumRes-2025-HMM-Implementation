@@ -28,15 +28,24 @@ class MarkovModel:
         self.save_data_verbose_path = save_data_verbose_path
         self.save_data_summary_path = save_data_summary_path
 
-    def data_preprocessing(self, verbose=False):
+    def data_preprocessing(self, verbose=False, worker_id=None, date=None):
         """
         Preprocess the data to extract sequences of observations.
+        :param verbose: If True, prints preprocessing information.
+        :param worker_id: Optional worker ID that will filter the data.
+        :param date: Optional date to filter the data.
         """
         # Sort by timestamp for each user
         self.df = self.df.sort_values(['user_id', 'created_at'])
 
+        self.df_organized = self.df.copy()
+        if worker_id is not None:
+            self.df_organized = self.df_organized[
+                (self.df_organized['user_id'] == worker_id) & 
+                (self.df_organized['date'] == date)
+            ]
         # Create sequences of responses (1 for correct, 0 for incorrect)
-        self.df_organized = self.df.groupby('user_id')['disagree'].agg(
+        self.df_organized = self.df_organized.groupby('user_id')['disagree'].agg(
             lambda x: list(x*-1 + 1)
         )
 
@@ -44,11 +53,12 @@ class MarkovModel:
         self.df_organized = self.df_organized.apply(
             lambda x: ['correct' if i else 'wrong' for i in x]
         )
-
+        print(self.df_organized.shape)
+        print(self.df_organized)
         if verbose:
             print("Data Preprocessing Complete.")
-            print(f"Number of users: {len(self.df_organized)}")
-            print(f"Example sequence: {self.df_organized.iloc[0]}")
+            print(f"Number of points: {len(self.df_organized)}")
+            # print(f"Example sequence: {self.df_organized.iloc[0]}")
 
 
         
@@ -333,16 +343,20 @@ class MarkovModel:
         return return_string[:-1]  # Remove trailing space
 
 if __name__ == "__main__":
-    # data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/answers_revised2.csv"
+    data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/answers_revised2.csv"
     save_data_summary_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/ECPD_full_summary.csv"
     save_data_verbose_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/ECPD_full_verbose.csv"
-    data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/test.csv"
+    # data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/test.csv"
     # data_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/fake_data.csv"
     # model = MarkovModel(data_file_path, [0.7, 0.3, 0.7, 0.3, 0.6, 0.4])
     # model = MarkovModel(data_file_path, [0.9, 0.7, 0.6, 0.4, 0.5, 0.5])
     model = MarkovModel(data_file_path=data_file_path, 
                         save_data_verbose_path=save_data_verbose_path,
                         save_data_summary_path=save_data_summary_path, 
-                        params=[0.9995, 0.998, 0.95, 0.6, 0.5, 0.5]) # Iteration 68: Time: 242.63 s Trans Mat: good: 0.99582 bad: 0.94148 State Probs: good: 0.98495 bad: 0.58401 Init Probs: good: 0.77121 bad: 0.22879, 
-    model.data_preprocessing(verbose=False)
+                        params=[0.99849304, 0.99607914, 0.97798713, 0.88902691, 0, 1]) # Iteration 68: Time: 242.63 s Trans Mat: good: 0.99582 bad: 0.94148 State Probs: good: 0.98495 bad: 0.58401 Init Probs: good: 0.77121 bad: 0.22879, 
+    model.data_preprocessing(verbose=True, 
+                             worker_id="955eb227-5421-470a-ae87-1b210a94bcfb",
+                             date="2023-01-19")
+    # model.data_preprocessing(verbose=True)
+    
     model.baum_welch(save_data=True)
