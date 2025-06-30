@@ -41,7 +41,7 @@ def two_state_hmm_data_gen(filename, n, n_range, params: list = [0.7, 0.7, 0.7, 
     of starting in a bad state. Denote this as P(B). Note P(G) = 1 - P(B).
     """
     with open(filename, "w") as f:
-        f.write("id,user_id,disagree,created_at,state\n")
+        f.write("id,user_id,disagree,created_at,state,date\n")
     for i in range(n):
         seq_length = random.randint(n_range[0], n_range[1])
         state = "good" if random.random() < initial_probabilities["good"] else "bad"
@@ -67,7 +67,7 @@ def two_state_hmm_data_gen(filename, n, n_range, params: list = [0.7, 0.7, 0.7, 
 
         with open(filename, "a") as f:
             for index, label in enumerate(sequence):
-                f.write(f"label{i:05d}{index:05d},USER{i:05d},{label},{i:05d}{index:05d},{state_list[index]}\n")
+                f.write(f"label{i:05d}{index:05d},USER{i:05d},{label},{i:05d}{index:05d},{state_list[index]},2023-01-19\n")
 
     exp_state = {}
     g = transition_matrix["good"]
@@ -100,3 +100,6 @@ if __name__ == "__main__":
     two_state_hmm_data_gen("fake_data.csv", 1, (num_labels, num_labels), [0.9995, 0.998, 0.95, 0.6, 0.6, 0.4])
     print("Data generation complete.")
     data_gen_verification("fake_data.csv")
+
+
+
