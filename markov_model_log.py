@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 from scipy.special import logsumexp
@@ -59,9 +60,10 @@ class MarkovModel:
         self.df_organized = self.df_organized.apply(
             lambda x: ['correct' if i else 'wrong' for i in x]
         )
-        print(self.df_organized.shape)
-        print(self.df_organized)
         if verbose:
+
+            print(self.df_organized.shape)
+            print(self.df_organized)
             print("Data Preprocessing Complete.")
             print(f"Number of points: {len(self.df_organized)}")
             # print(f"Example sequence: {self.df_organized.iloc[0]}")
@@ -462,6 +464,11 @@ class MarkovModel:
         :param params: Parameters to use for the Viterbi algorithm
         :return: None. Will Generate a plot the state graph.
         """
+
+        # Ensure the output directory exists
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
         # Filter the data for the specific user and day
         user_df = self.df[(self.df['user_id'] == user_id) & 
                           (self.df['date'] == date)].copy()
@@ -474,15 +481,28 @@ class MarkovModel:
         # Merge the state sequence with the user_df
         user_df['pred_state'] = state_sequence
 
+        # Count the number of switches between states
+        count = 0
+        for i in range(1, len(user_df)):
+            if user_df['pred_state'].iloc[i] != user_df['pred_state'].iloc[i-1]:
+                count += 1
+
         # user_df['created_at'] = pd.to_datetime(user_df['created_at'])
 
         # # Convert time window to rolling average based on actual timestamps
         # user_df['disagree_rate'] = user_df.set_index('created_at')['disagree'].rolling(window=timebucket, min_periods=1).mean()
+        
+        user_df['created_at'] = pd.to_datetime(user_df['created_at'])
+        if (type(timebucket) == str):
+            time_ordered_df = user_df.sort_values(by='created_at')
+            time_ordered_df = time_ordered_df.set_index('created_at')
+            rolling_values = time_ordered_df["disagree"].rolling(window=timebucket, center=True, min_periods=1).mean()
 
-        rolling_values = user_df['disagree'].rolling(window=15, min_periods=1).mean()
-
-        # Assign to DataFrame with explicit indexing
-        user_df.loc[:, 'disagree_rate'] = rolling_values
+            # Map rolling values back to user_df using created_at as the key
+            user_df['disagree_rate'] = user_df['created_at'].map(rolling_values)
+        else:
+            rolling_values = user_df['disagree'].rolling(window=timebucket, center=True, min_periods=1).mean()
+            user_df['disagree_rate'] = rolling_values
 
         # Calculate average duration
         user_df['duration_ms'] = pd.to_numeric(user_df['duration_ms'])
@@ -500,6 +520,15 @@ class MarkovModel:
         disag_rate_g = 1 - np.exp(self.state_probabilities_log["good"])
         disag_rate_b = 1 - np.exp(self.state_probabilities_log["bad"])
 
+        # Accuracy
+        exp_acc = np.where(user_df['pred_state'] == "good",
+                           np.exp(self.state_probabilities_log["good"]),
+                         + np.exp(self.state_probabilities_log["bad"]))
+        average_disagree_rate = user_df['disagree_rate'].mean()
+        accuracy = (1 - user_df['disagree_rate'] - (exp_acc))**2
+        accuracy = accuracy.mean()
+        baseline_accuracy = (user_df['disagree_rate'] - average_disagree_rate)**2
+        baseline_accuracy = baseline_accuracy.mean()
 
         # Create a plot of the disagreement rate, with the predicted states as a background
         # Create figure and axis
@@ -508,9 +537,9 @@ class MarkovModel:
 
         
         # Prepare data
-        x = user_df['created_at'].apply(lambda x: x.split()[1]).to_numpy()
+        # x = user_df['created_at'].apply(lambda x: x.split()[1]).to_numpy()
+        x = user_df['created_at'].to_numpy()
         y = user_df['disagree_rate'].to_numpy()
-        print(y)
         
         # Calculate y-axis limits with padding
         ymin, ymax = min(y), max(y)
@@ -571,7 +600,10 @@ class MarkovModel:
                     f'Expected Time in Good State: {exp_g_state:.2f} periods\n',
                     f'Expected Time in Bad State: {exp_b_state:.2f} periods\n',
                     f'Disagreement Rate in Good State: {disag_rate_g:.2f}\n',
-                    f'Disagreement Rate in Bad State: {disag_rate_b:.2f}\n')
+                    f'Disagreement Rate in Bad State: {disag_rate_b:.2f}\n',
+                    f'Number of State Switches: {count}\n',
+                    f'MSE of disagreement rate: {accuracy:.4f}\n',
+                    f'Baseline MSE: {baseline_accuracy:.4f}\n',)
         # Create a text box in the upper left corner of the plot
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
         ax.text(0.05, 0.95, ''.join(textstr),
@@ -589,8 +621,10 @@ class MarkovModel:
         plt.savefig(output_path, 
                     dpi=300,
                     bbox_inches='tight')
-        plt.show()
+        # plt.show()
         plt.close()
+    
+
 
     def get_params_exp(self):
         """Helper function to get all parameters as a numpy array"""
@@ -683,7 +717,6 @@ if __name__ == "__main__":
     # )
 
 
-
     # Testing viterbi_log on real worker data:
     # model = MarkovModel(data_file_path=data_file_path,
     #                     save_data_verbose_path=save_data_verbose_path,
@@ -728,47 +761,48 @@ if __name__ == "__main__":
     #     model.baum_welch(save_data=True)
 
 
-    # train_list = [
-    # ["955eb227-5421-470a-ae87-1b210a94bcfb", "2023-01-19", [0.99881243, 0.99676431, 0.97708267, 0.88847533, 0.00000000, 1.00000000]],
-    # ["229addc1-f8db-430d-887c-6b6719718978", "2023-01-23", [0.99872311, 0.99862214, 0.98199381, 0.89386636, 0.00000000, 1.00000000]],
-    # ["194db731-0e6e-450e-bfe4-aba328b25861", "2023-01-21", [0.97098767, 0.94486824, 0.97609808, 0.90344657, 1.00000000, 0.00000000]],
-    # ["45b63e66-62e4-4156-ae45-60832ab4bd73", "2023-01-21", [0.98099109, 0.64208946, 0.95156533, 0.28076786, 1.00000000, 0.00000000]],
-    # ["15d5a6ba-813e-42c0-b3c6-c260a0a358c6", "2023-01-19", [0.99984841, 0.99687240, 0.97275188, 0.87637805, 0.00000000, 1.00000000]],
-    # ["9d50aa2e-3d04-49cf-a000-0f0b92e8592e", "2023-01-21", [0.99687528, 0.98357774, 0.96068858, 0.57871568, 0.00000000, 1.00000000]],
-    # ["7e672082-824d-49b2-ae51-1a0e0ac09dd3", "2023-01-22", [0.99811104, 0.99925745, 0.98349474, 0.92041379, 1.00000000, 0.00000000]],
-    # ["4c709b89-7a88-4bed-8ee2-fe08c96ee83f", "2023-01-21", [0.99644558, 0.95152804, 0.97267302, 0.63075011, 1.00000000, 0.00000000]],
-    # ["1cdd9682-4160-44aa-b4fb-6cebdbb63af0", "2023-01-21", [0.99896960, 0.98848887, 0.96816190, 0.76310725, 1.00000000, 0.00000000]],
-    # ["0ee6d700-8332-4147-9ef1-cf23169fe958", "2023-01-19", [0.99124663, 0.93245263, 0.96252469, 0.12904887, 0.00000000, 1.00000000]],
-    # ["0b3438ad-cf01-46fb-8b65-eeb47d0fcad9", "2023-01-19", [0.99733764, 0.96880579, 0.97655913, 0.22445456, 1.00000000, 0.00000000]]
-    # ]
+    def make_state_graphs_for_a_few_select_users():
+        train_list = [
+        ["955eb227-5421-470a-ae87-1b210a94bcfb", "2023-01-19", [0.99881243, 0.99676431, 0.97708267, 0.88847533, 0.00000000, 1.00000000]],
+        ["229addc1-f8db-430d-887c-6b6719718978", "2023-01-23", [0.99872311, 0.99862214, 0.98199381, 0.89386636, 0.00000000, 1.00000000]],
+        ["194db731-0e6e-450e-bfe4-aba328b25861", "2023-01-21", [0.97098767, 0.94486824, 0.97609808, 0.90344657, 1.00000000, 0.00000000]],
+        ["45b63e66-62e4-4156-ae45-60832ab4bd73", "2023-01-21", [0.98099109, 0.64208946, 0.95156533, 0.28076786, 1.00000000, 0.00000000]],
+        ["15d5a6ba-813e-42c0-b3c6-c260a0a358c6", "2023-01-19", [0.99984841, 0.99687240, 0.97275188, 0.87637805, 0.00000000, 1.00000000]],
+        ["9d50aa2e-3d04-49cf-a000-0f0b92e8592e", "2023-01-21", [0.99687528, 0.98357774, 0.96068858, 0.57871568, 0.00000000, 1.00000000]],
+        ["7e672082-824d-49b2-ae51-1a0e0ac09dd3", "2023-01-22", [0.99811104, 0.99925745, 0.98349474, 0.92041379, 1.00000000, 0.00000000]],
+        ["4c709b89-7a88-4bed-8ee2-fe08c96ee83f", "2023-01-21", [0.99644558, 0.95152804, 0.97267302, 0.63075011, 1.00000000, 0.00000000]],
+        ["1cdd9682-4160-44aa-b4fb-6cebdbb63af0", "2023-01-21", [0.99896960, 0.98848887, 0.96816190, 0.76310725, 1.00000000, 0.00000000]],
+        ["0ee6d700-8332-4147-9ef1-cf23169fe958", "2023-01-19", [0.99124663, 0.93245263, 0.96252469, 0.12904887, 0.00000000, 1.00000000]],
+        ["0b3438ad-cf01-46fb-8b65-eeb47d0fcad9", "2023-01-19", [0.99733764, 0.96880579, 0.97655913, 0.22445456, 1.00000000, 0.00000000]]
+        ]
 
-    # global_params = [0.99582, 0.94148, 0.98495, 0.58401, 0.77121, 0.22879]
-    # output_dir_ind = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/individual_params"
-    # output_dir_glob = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/global_params"
+        global_params = [0.99582, 0.94148, 0.98495, 0.58401, 0.77121, 0.22879]
+        output_dir_ind = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/individual_params"
+        output_dir_glob = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/global_params"
 
-    # for user_id, date, params in train_list:
-    #     # print(f"Training for user {user_id} on date {date} with params {params}")
-    #     model = MarkovModel(data_file_path=data_file_path,
-    #                         save_data_verbose_path=save_data_verbose_path,
-    #                         save_data_summary_path=save_data_summary_path,
-    #                         params = global_params)
-    #     model.preprocess_data(verbose=True,
-    #                             worker_id=user_id,
-    #                             date=date)
-    #     model.generate_state_graph(
-    #         output_dir=output_dir_ind,
-    #         user_id=user_id,
-    #         date=date,
-    #         params=params,
-    #         timebucket=15
-    #     )
-    #     model.generate_state_graph(
-    #         output_dir=output_dir_glob,
-    #         user_id=user_id,
-    #         date=date,
-    #         params=global_params,
-    #         timebucket=15
-    #     )
+        for user_id, date, params in train_list:
+            # print(f"Training for user {user_id} on date {date} with params {params}")
+            model = MarkovModel(data_file_path=data_file_path,
+                                save_data_verbose_path=save_data_verbose_path,
+                                save_data_summary_path=save_data_summary_path,
+                                params = global_params)
+            model.preprocess_data(verbose=True,
+                                    worker_id=user_id,
+                                    date=date)
+            model.generate_state_graph(
+                output_dir=output_dir_ind,
+                user_id=user_id,
+                date=date,
+                params=params,
+                timebucket=15
+            )
+            model.generate_state_graph(
+                output_dir=output_dir_glob,
+                user_id=user_id,
+                date=date,
+                params=global_params,
+                timebucket=15
+            )
 
     # Testing the preprocess data function
     # model = MarkovModel(data_file_path=data_file_path,
@@ -787,46 +821,111 @@ if __name__ == "__main__":
     # print(model.df_organized)
     # model.df_organized.to_csv("prediction.csv")
 
+    def getting_all_params_for_users_on_each_day():
+        """
+        This function will iterate over each user and each day, preprocess the data,
+        and run the Baum-Welch algorithm to get the parameters for each user on each day.
+        It will save the results in a CSV file with columns: user_id, date, params, conv.
+        It divides the data for each user on a day, into sequences split by a 60 second gap.
+        It will also save the parameters and convergence status for each user on each day.
+        The results will be saved in a CSV file named 'user_date_params.csv' in the
+        '/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/' directory.
+        The parameters are initialized to a global set of parameters.
+        """
+        # Getting parameters for each user on each day.
+        glob_params = [0.99881183, 0.99676310, 0.97708480, 0.88847795, 0.4, 0.6]
+        model = MarkovModel(data_file_path=data_file_path,
+                            save_data_verbose_path=save_data_verbose_path,
+                            save_data_summary_path=save_data_summary_path,
+                            params = glob_params)
+        # Get unique combinations of user_id and date
+        user_date_pairs = model.df[['user_id', 'date']].drop_duplicates()
+        # Initialize DataFrame to store results
+        results_df = pd.DataFrame(columns=['user_id', 'date', 'params', 'conv'])
+        # Iterate over each user and date combination
+        for _, row in user_date_pairs.iterrows():
+            user_id = row['user_id']
+            date = row['date']
+            print(f"Processing user {user_id} on date {date}")
+            
+            # Preprocess data for this user and date
+            model.preprocess_data_continuous_activity(
+                verbose=True,
+                min_sequence_length=60,
+                max_time_gap=60,
+                worker_id=user_id,
+                date=date
+            )
 
-    # Getting parameters for each user on each day.
-    glob_params = [0.99881183, 0.99676310, 0.97708480, 0.88847795, 0.4, 0.6]
-    model = MarkovModel(data_file_path=data_file_path,
-                        save_data_verbose_path=save_data_verbose_path,
-                        save_data_summary_path=save_data_summary_path,
-                        params = glob_params)
-    # Get unique combinations of user_id and date
-    user_date_pairs = model.df[['user_id', 'date']].drop_duplicates()
-    # Initialize DataFrame to store results
-    results_df = pd.DataFrame(columns=['user_id', 'date', 'params', 'conv'])
-    # Iterate over each user and date combination
-    for _, row in user_date_pairs.iterrows():
-        user_id = row['user_id']
-        date = row['date']
-        print(f"Processing user {user_id} on date {date}")
-        
-        # Preprocess data for this user and date
-        model.preprocess_data_continuous_activity(
-            verbose=True,
-            min_sequence_length=60,
-            max_time_gap=60,
-            worker_id=user_id,
-            date=date
-        )
+            model.initialize_params(glob_params)
+            
+            # Run Baum-Welch algorithm
+            if len(model.df_organized) > 0:  # Only if we have sequences for this user/date
+                params = model.baum_welch(save_data=True)
+                print(f"Params for {user_id} on {date}: {params}")
+                # Check convergence
+                converged = model.converged
+                # Append results to DataFrame
+                results_df = results_df._append({
+                    'user_id': user_id,
+                    'date': date,
+                    'params': params,
+                    'conv': converged
+                }, ignore_index=True)
+        # Save results to CSV
+        results_df.to_csv('/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params.csv', index=False)
 
-        model.initialize_params(glob_params)
-        
-        # Run Baum-Welch algorithm
-        if len(model.df_organized) > 0:  # Only if we have sequences for this user/date
-            params = model.baum_welch(save_data=True)
-            print(f"Params for {user_id} on {date}: {params}")
-            # Check convergence
-            converged = model.converged
-            # Append results to DataFrame
-            results_df = results_df._append({
-                'user_id': user_id,
-                'date': date,
-                'params': params,
-                'conv': converged
-            }, ignore_index=True)
-    # Save results to CSV
-    results_df.to_csv('/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params.csv', index=False)
+
+    def make_state_graphs_for_a_few_select_users_from_csv_file():
+        train_list = [
+        ["955eb227-5421-470a-ae87-1b210a94bcfb", "2023-01-19", [0.99881243, 0.99676431, 0.97708267, 0.88847533, 0.00000000, 1.00000000]],
+        ["229addc1-f8db-430d-887c-6b6719718978", "2023-01-23", [0.99872311, 0.99862214, 0.98199381, 0.89386636, 0.00000000, 1.00000000]],
+        ["194db731-0e6e-450e-bfe4-aba328b25861", "2023-01-21", [0.97098767, 0.94486824, 0.97609808, 0.90344657, 1.00000000, 0.00000000]],
+        ["45b63e66-62e4-4156-ae45-60832ab4bd73", "2023-01-21", [0.98099109, 0.64208946, 0.95156533, 0.28076786, 1.00000000, 0.00000000]],
+        ["15d5a6ba-813e-42c0-b3c6-c260a0a358c6", "2023-01-19", [0.99984841, 0.99687240, 0.97275188, 0.87637805, 0.00000000, 1.00000000]],
+        ["9d50aa2e-3d04-49cf-a000-0f0b92e8592e", "2023-01-21", [0.99687528, 0.98357774, 0.96068858, 0.57871568, 0.00000000, 1.00000000]],
+        ["7e672082-824d-49b2-ae51-1a0e0ac09dd3", "2023-01-22", [0.99811104, 0.99925745, 0.98349474, 0.92041379, 1.00000000, 0.00000000]],
+        ["4c709b89-7a88-4bed-8ee2-fe08c96ee83f", "2023-01-21", [0.99644558, 0.95152804, 0.97267302, 0.63075011, 1.00000000, 0.00000000]],
+        ["1cdd9682-4160-44aa-b4fb-6cebdbb63af0", "2023-01-21", [0.99896960, 0.98848887, 0.96816190, 0.76310725, 1.00000000, 0.00000000]],
+        ["0ee6d700-8332-4147-9ef1-cf23169fe958", "2023-01-19", [0.99124663, 0.93245263, 0.96252469, 0.12904887, 0.00000000, 1.00000000]],
+        ["0b3438ad-cf01-46fb-8b65-eeb47d0fcad9", "2023-01-19", [0.99733764, 0.96880579, 0.97655913, 0.22445456, 1.00000000, 0.00000000]]
+        ]
+
+
+
+
+        # global_params = [0.99582, 0.94148, 0.98495, 0.58401, 0.77121, 0.22879]
+        output_dir_ind = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/individual_params"
+        param_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params.csv"
+        # output_dir_glob = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/global_params"
+        # Load global parameters from the CSV file
+        params_csv = pd.read_csv(param_file_path)
+
+
+        for user_id, date, params in train_list:
+
+            params = params_csv[(user_id == params_csv['user_id']) &
+                                (date == params_csv['date'])]['params'].values[0]
+            params = [float(p) for p in params.strip('[]').split(' ') if p]
+            # print(f"Training for user {user_id} on date {date} with params {params}")
+            model = MarkovModel(data_file_path=data_file_path,
+                                save_data_verbose_path=save_data_verbose_path,
+                                save_data_summary_path=save_data_summary_path,
+                                params = params)
+            model.preprocess_data(verbose=True,
+                                    worker_id=user_id,
+                                    date=date)
+            model.generate_state_graph(
+                output_dir=output_dir_ind,
+                user_id=user_id,
+                date=date,
+                params=params,
+                timebucket="15s"
+            )
+
+
+    def getting_some_accuracy_metrics_out_of_viterbi():
+        pass
+
+    # make_state_graphs_for_a_few_select_users()
+    make_state_graphs_for_a_few_select_users_from_csv_file()

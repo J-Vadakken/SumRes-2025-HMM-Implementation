@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -5,6 +6,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+import seaborn as sns
 import ast
 
 
@@ -24,6 +26,13 @@ class PlotObject:
             return None
     
     def k_cluster_elbow(self, data_file_path, all_columns=False, scale=True):
+
+        # Ensure directory exists
+        plot_dir = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/clustering"
+        if not os.path.exists(plot_dir):
+            os.makedirs(plot_dir)
+
+
         df = pd.read_csv(data_file_path)
         if (not(all_columns)):
             df = df[df["conv"] == True]
@@ -57,6 +66,15 @@ class PlotObject:
         plt.savefig("/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/clustering/elbow_plot.png")
 
     def k_cluster(self, data_file_path, all_columns=False, n_clusters=6, scale=True):
+
+
+
+        # Ensure directory exists
+        plot_dir = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/clustering"
+        if not os.path.exists(plot_dir):
+            os.makedirs(plot_dir)
+
+
         df = pd.read_csv(data_file_path)
         if (not(all_columns)):
             df = df[df["conv"] == True]
@@ -71,15 +89,24 @@ class PlotObject:
         df_features = df_features.dropna()
 
         
-        if scale: 
+        if scale:
+            scalers = {} # Store the scaler for inverse transform later
             scaler = MinMaxScaler()
             for feature in ['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']:
                 scaler.fit(df_features[[feature]])
                 df_features[feature] = scaler.transform(df_features[[feature]])
+                scalers[feature] = scaler
 
         km = KMeans(n_clusters=n_clusters)
         y_predicted = km.fit_predict(df_features[['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']])
         
+        scaled_centroids = km.cluster_centers_
+        unscaled_centroids = scaled_centroids.copy()
+        if scale:
+            for i, feature in enumerate(['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']):
+                unscaled_centroids[:, i] = scalers[feature].inverse_transform(scaled_centroids[:, i].reshape(-1, 1)).flatten()
+        else:
+            unscaled_centroids = scaled_centroids
         #2D scatter plot with PCA Dimensionality Reduction      
         pca = PCA(n_components=2)
         data_2d = pca.fit_transform(df_features[['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']])
@@ -99,9 +126,66 @@ class PlotObject:
         plt.title(f'K-Means Clustering with {n_clusters} Clusters')
         plt.legend()
         plt.grid(True, alpha=0.3)
-        plt.show()
+        # plt.show()
         plt.savefig(f"/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/clustering/kmeans_{n_clusters}_clusters.png")
 
+        # 3D scatter plot with PCA Dimensionality Reduction
+        pca_3d = PCA(n_components=3)
+        data_3d = pca_3d.fit_transform(df_features[['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']])
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        for i in range(n_clusters):
+            ax.scatter(data_3d[y_predicted == i, 0], data_3d[y_predicted == i, 1], 
+                       data_3d[y_predicted == i, 2], 
+                       color=colors[i % len(colors)], label=f'Cluster {i}')
+        # Plot centroids
+        centroids_3d = pca_3d.transform(km.cluster_centers_)
+        ax.scatter(centroids_3d[:, 0], centroids_3d[:, 1], centroids_3d[:, 2], 
+                   color='black', marker='X', s=200, label='Centroids')
+        ax.set_xlabel(f"PC1 {pca_3d.explained_variance_ratio_[0]:.2f} variance")
+        ax.set_ylabel(f"PC2 {pca_3d.explained_variance_ratio_[1]:.2f} variance")
+        ax.set_zlabel(f"PC3 {pca_3d.explained_variance_ratio_[2]:.2f} variance")
+        ax.set_title(f'3D K-Means Clustering with {n_clusters} Clusters')
+        ax.legend()
+        plt.savefig(f"/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/clustering/kmeans_3d_{n_clusters}_clusters.png")
+        # plt.show()
+        plt.close()
+
+        # Parallel Coordinates Plot
+        df_features['cluster'] = y_predicted
+        # Parallel coordinates plot
+        plt.figure(figsize=(12, 6))
+        features = ['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']
+        colors = ['red', 'blue', 'green', 'orange', 'purple', 'cyan']
+
+        for cluster in range(n_clusters):
+            cluster_data = df_features[df_features['cluster'] == cluster][features]
+            for idx, row in cluster_data.iterrows():
+                plt.plot(range(len(features)), row.values, color=colors[cluster % len(colors)], alpha=0.7)
+
+        plt.xticks(range(len(features)), features, rotation=45)
+        plt.ylabel('Scaled Feature Values')
+        plt.title('Parallel Coordinates Plot of Clusters')
+        plt.grid(True, alpha=0.3)
+        plt.legend([f'Cluster {i}' for i in range(n_clusters)])
+        plt.tight_layout()
+        plt.savefig(f"/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/clustering/parallel_coords_{n_clusters}_clusters.png")
+        # plt.show()
+        plt.close()
+
+        plt.figure(figsize=(10, 6))
+        features = ['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']
+        centers_df = pd.DataFrame(km.cluster_centers_, 
+                                columns=features,
+                                index=[f'Cluster_{i}' for i in range(len(km.cluster_centers_))])
+
+        sns.heatmap(centers_df, annot=True, cmap='viridis', fmt='.3f')
+        plt.title('Cluster Centers Heatmap')
+        plt.savefig(f"/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/plots/clustering/heatmap_{n_clusters}_clusters.png")
+        # plt.show()
+        plt.close()
+
+        print(unscaled_centroids)
 
 
 
