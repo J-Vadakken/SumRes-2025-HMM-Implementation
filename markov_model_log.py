@@ -383,6 +383,17 @@ class MarkovModel:
                 np.log(len(sequences))
             self.initial_probabilities_log["bad"] = new_initial_log["bad"] - \
                 np.log(len(sequences))
+
+            # Capping values to avoid numerical issues
+            CLIP_VAL_MAX = np.log(0.999999)
+            CLIP_VAL_MIN = np.log(0.000001)
+            self.transition_matrix_log["good"] = np.clip(self.transition_matrix_log["good"], CLIP_VAL_MIN, CLIP_VAL_MAX)
+            self.transition_matrix_log["bad"] = np.clip(self.transition_matrix_log["bad"], CLIP_VAL_MIN, CLIP_VAL_MAX)
+            self.state_probabilities_log["good"] = np.clip(self.state_probabilities_log["good"], CLIP_VAL_MIN, CLIP_VAL_MAX)
+            self.state_probabilities_log["bad"] = np.clip(self.state_probabilities_log["bad"], CLIP_VAL_MIN, CLIP_VAL_MAX)
+            self.initial_probabilities_log["good"] = np.clip(self.initial_probabilities_log["good"], CLIP_VAL_MIN, CLIP_VAL_MAX)
+            self.initial_probabilities_log["bad"] = np.clip(self.initial_probabilities_log["bad"], CLIP_VAL_MIN, CLIP_VAL_MAX)
+
             
             print(f"Iteration {iteration + 1}:",
                   f"Time: {time.time() - start_time:.2f} s",
@@ -392,11 +403,15 @@ class MarkovModel:
             
             if save_data:
                 self.save_data_to_verbose_file(iteration + 1, time.time() - start_time)
-        
             # Check convergence
             if np.allclose(old_params, self.get_params_exp(), rtol=tolerance):
                 self.converged = True
                 break
+            if np.any(np.isnan(self.get_params_exp())):
+                print("NaN encountered in parameters. Stopping training.")
+                break
+
+
         if save_data:
             self.save_data_to_summary_file(
                 message=f"Iteration {iteration + 1}, tol: {tolerance}", 
@@ -821,8 +836,9 @@ if __name__ == "__main__":
     # print(model.df_organized)
     # model.df_organized.to_csv("prediction.csv")
 
-    def getting_all_params_for_users_on_each_day():
+    def getting_all_params_for_users_on_each_day(break_length=60):
         """
+        :param break_length: Length of the break in seconds to split the sequences.
         This function will iterate over each user and each day, preprocess the data,
         and run the Baum-Welch algorithm to get the parameters for each user on each day.
         It will save the results in a CSV file with columns: user_id, date, params, conv.
@@ -852,7 +868,7 @@ if __name__ == "__main__":
             model.preprocess_data_continuous_activity(
                 verbose=True,
                 min_sequence_length=60,
-                max_time_gap=60,
+                max_time_gap=break_length,
                 worker_id=user_id,
                 date=date
             )
@@ -873,7 +889,7 @@ if __name__ == "__main__":
                     'conv': converged
                 }, ignore_index=True)
         # Save results to CSV
-        results_df.to_csv('/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params.csv', index=False)
+        results_df.to_csv('/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params_{break_length}.csv', index=False)
 
 
     def make_state_graphs_for_a_few_select_users_from_csv_file():
@@ -928,4 +944,7 @@ if __name__ == "__main__":
         pass
 
     # make_state_graphs_for_a_few_select_users()
-    make_state_graphs_for_a_few_select_users_from_csv_file()
+    # make_state_graphs_for_a_few_select_users_from_csv_file()
+    getting_all_params_for_users_on_each_day(break_length=60)
+    getting_all_params_for_users_on_each_day(break_length=60*5)
+    getting_all_params_for_users_on_each_day(break_length=60*10)
