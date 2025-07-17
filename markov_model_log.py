@@ -889,7 +889,7 @@ if __name__ == "__main__":
                     'conv': converged
                 }, ignore_index=True)
         # Save results to CSV
-        results_df.to_csv('/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params_{break_length}.csv', index=False)
+        results_df.to_csv(f'/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params_{break_length}.csv', index=False)
 
 
     def make_state_graphs_for_a_few_select_users_from_csv_file():
@@ -947,4 +947,4 @@ if __name__ == "__main__":
     # make_state_graphs_for_a_few_select_users_from_csv_file()
     getting_all_params_for_users_on_each_day(break_length=60)
     getting_all_params_for_users_on_each_day(break_length=60*5)
-    getting_all_params_for_users_on_each_day(break_length=60*10)
+    # getting_all_params_for_users_on_each_day(break_length=60*10)
