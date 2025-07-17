@@ -211,11 +211,11 @@ class PlotObject:
 
 if __name__ == "__main__":
     plot_object = PlotObject()
-    data_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params.csv"
+    data_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params_60.csv"
     print("PlotObject instance created successfully.")
     # You can call methods on plot_object here, e.g., plot_object.k_cluster('data.csv')
 
     features = ['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']
 
     plot_object.k_cluster_elbow(data_file_path, features, all_columns=False, scale=True, transition_flag=True) #all_columns=False)
-    plot_object.k_cluster(data_file_path, features, all_columns=False, n_clusters=4, scale=True, transition_flag=True) #all_columns=False, n_clusters=6)
+    plot_object.k_cluster(data_file_path, features, all_columns=False, n_clusters=6, scale=True, transition_flag=True) #all_columns=False, n_clusters=6)
