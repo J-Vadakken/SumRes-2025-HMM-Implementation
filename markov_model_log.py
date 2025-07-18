@@ -136,8 +136,40 @@ class MarkovModel:
                 return False
             print(f"Number of sequences: {len(sequences)}")
             print(f"Average sequence length: {np.mean([len(seq) for seq in sequences]):.2f}")
+            print(f"Median sequence length: {np.median([len(seq) for seq in sequences]):.2f}")
+            print(f"Standard deviation of sequence length: {np.std([len(seq) for seq in sequences]):.2f}")
             print(f"Max sequence length: {max([len(seq) for seq in sequences])}")
             print(f"Min sequence length: {min([len(seq) for seq in sequences])}")
+
+            # Find average time between first and last annotation in each sequence
+            avg_time_diff = []
+            for seq in sequences:
+                if len(seq) > 0:
+                    first_time = user_data.loc[user_data.index[0], 'created_at']
+                    last_time = user_data.loc[user_data.index[len(seq)-1], 'created_at']
+                    avg_time_diff.append((last_time - first_time).total_seconds())
+            print(f"Average time between first and last annotation in sequences: {np.mean(avg_time_diff):.2f} seconds")
+            print(f"Median time between first and last annotation in sequences: {np.median(avg_time_diff):.2f} seconds")
+            print(f"Standard deviation of time between first and last annotation in sequences: {np.std(avg_time_diff):.2f} seconds")
+            print(f"Max time between first and last annotation in sequences: {max(avg_time_diff):.2f} seconds")
+            print(f"Min time between first and last annotation in sequences: {min(avg_time_diff):.2f} seconds")
+
+            # Plot the distributions
+            plt.figure(figsize=(12, 6))
+            plt.subplot(1, 2, 1)
+            plt.hist([len(seq) for seq in sequences], bins=30, color='blue', alpha=0.7)
+            plt.title("Sequence Length Distribution")
+            plt.xlabel("Length")
+            plt.ylabel("Frequency")
+
+            plt.subplot(1, 2, 2)
+            plt.hist(avg_time_diff, bins=30, color='green', alpha=0.7)
+            plt.title("Average Time Between Annotations Distribution")
+            plt.xlabel("Time (seconds)")
+            plt.ylabel("Frequency")
+
+            plt.tight_layout()
+            plt.show()
 
         return len(sequences) > 0
         
@@ -940,11 +972,25 @@ if __name__ == "__main__":
             )
 
 
-    def getting_some_accuracy_metrics_out_of_viterbi():
-        pass
+    def generate_continuous_activity_information():
+        data_file_path = "/home/jgv555/CS/ResSum2025/drive-download-20250502T210721Z-1-001/ECPD/answers_revised2.csv"
+        save_data_summary_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/ECPD_full_summary.csv"
+        save_data_verbose_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/ECPD_full_verbose.csv"
+        model = MarkovModel(data_file_path=data_file_path,
+                            save_data_verbose_path=save_data_verbose_path,
+                            save_data_summary_path=save_data_summary_path,
+                            params = [0.99881183, 0.99676310, 0.97708480, 0.88847795, 0.00000000, 1.00000000])
+
+        model.preprocess_data_continuous_activity(min_sequence_length=60, verbose=True)
+        model.preprocess_data_continuous_activity(min_sequence_length=300, verbose=True)
+        model.preprocess_data_continuous_activity(min_sequence_length=600, verbose=True)
 
     # make_state_graphs_for_a_few_select_users()
     # make_state_graphs_for_a_few_select_users_from_csv_file()
-    getting_all_params_for_users_on_each_day(break_length=60)
-    getting_all_params_for_users_on_each_day(break_length=60*5)
+    # getting_all_params_for_users_on_each_day(break_length=60)
+    # getting_all_params_for_users_on_each_day(break_length=60*5)
     # getting_all_params_for_users_on_each_day(break_length=60*10)
+
+    generate_continuous_activity_information()
+
+    
