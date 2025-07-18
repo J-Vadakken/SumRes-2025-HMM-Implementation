@@ -44,8 +44,8 @@ class PlotObject:
             df_features['trans_g'] = df_features['params'].apply(lambda x: x[0])
             df_features['trans_b'] = df_features['params'].apply(lambda x: x[1])
         else: 
-            df_features['trans_g'] = df_features['params'].apply(lambda x: min(1/(1-x[0]), 1000000))
-            df_features['trans_b'] = df_features['params'].apply(lambda x: min(1/(1-x[1]), 1000000))
+            df_features['trans_g'] = df_features['params'].apply(lambda x: 1/(1-x[0]))
+            df_features['trans_b'] = df_features['params'].apply(lambda x: 1/(1-x[1]))
         df_features['prob_g'] = df_features['params'].apply(lambda x: x[2])
         df_features['prob_b'] = df_features['params'].apply(lambda x: x[3])
         df_features['init_prob_g'] = df_features['params'].apply(lambda x: x[4])
@@ -89,8 +89,8 @@ class PlotObject:
             df_features['trans_g'] = df_features['params'].apply(lambda x: x[0])
             df_features['trans_b'] = df_features['params'].apply(lambda x: x[1])
         else: 
-            df_features['trans_g'] = df_features['params'].apply(lambda x: min(1/(1-x[0]),1000000))
-            df_features['trans_b'] = df_features['params'].apply(lambda x: min(1/(1-x[1]), 1000000))
+            df_features['trans_g'] = df_features['params'].apply(lambda x: 1/(1-x[0]))
+            df_features['trans_b'] = df_features['params'].apply(lambda x: 1/(1-x[1]))
 
         df_features['prob_g'] = df_features['params'].apply(lambda x: x[2])
         df_features['prob_b'] = df_features['params'].apply(lambda x: x[3])
@@ -198,24 +198,37 @@ class PlotObject:
             print(f"\nCluster {cluster_id}: {size} members")
             print("Centroid values:")
             for i, feature in enumerate(features):
-                print(f"  {feature}: {unscaled_centroids[cluster_id][i]:.4f}")
-                if feature == "trans_g":
+                if not ((feature in ["trans_g", "trans_b"]) and (not transition_flag)):
+                    print(f"  {feature}: {unscaled_centroids[cluster_id][i]:.4f}")
+                if feature == "trans_g" and transition_flag:
                     num = 1/(1-unscaled_centroids[cluster_id][i])
                     print(f" {feature} Days in good state: {num:.4f}")
-                if feature == "trans_b":
+                if feature == "trans_b" and transition_flag:
                     num = 1/(1-unscaled_centroids[cluster_id][i])
                     print(f" {feature} Days in bad state: {num:.4f}")
+                
+                if feature == "trans_g" and not transition_flag:
+                    num1 = unscaled_centroids[cluster_id][i]
+                    num2 = 1 - 1/num1
+                    print(f" {feature}: {num2:.4f}")
+                    print(f" {feature} Days in good state: {num1:.4f}")
+                if feature == "trans_b" and not transition_flag:
+                    num1 = unscaled_centroids[cluster_id][i]
+                    num2 = 1 - 1/num1
+                    print(f" {feature}: {num2:.4f}")
+                    print(f" {feature} Days in bad state: {num1:.4f}")
 
 
 
 
 if __name__ == "__main__":
     plot_object = PlotObject()
-    data_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params_60.csv"
+    data_file_path = "/home/jgv555/CS/ResSum2025/model/SumRes-2025-HMM-Implementation/DataSummary/user_date_params_600.csv"
     print("PlotObject instance created successfully.")
-    # You can call methods on plot_object here, e.g., plot_object.k_cluster('data.csv')
 
     features = ['trans_g', 'trans_b', 'prob_g', 'prob_b', 'init_prob_g']
 
-    plot_object.k_cluster_elbow(data_file_path, features, all_columns=False, scale=True, transition_flag=True) #all_columns=False)
-    plot_object.k_cluster(data_file_path, features, all_columns=False, n_clusters=6, scale=True, transition_flag=True) #all_columns=False, n_clusters=6)
+    plot_object.k_cluster_elbow(data_file_path, features, all_columns=False, scale=True, transition_flag=False) #all_columns=False)
+    plot_object.k_cluster(data_file_path, features, all_columns=False, n_clusters=3, scale=True, transition_flag=False) #all_columns=False, n_clusters=6)
+    plot_object.k_cluster(data_file_path, features, all_columns=False, n_clusters=4, scale=True, transition_flag=False) #all_columns=False, n_clusters=6)
+    
